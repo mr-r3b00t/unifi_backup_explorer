@@ -70,8 +70,9 @@ tr:hover td { background:rgba(59,130,246,0.05); }
 .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
 .card { background:var(--surface2); border-radius:8px; padding:16px; border:1px solid var(--border); }
 .card h4 { margin-bottom:8px; font-size:0.95rem; }
-.card .row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem; }
-.card .row .label { color:var(--text2); }
+.card .row { display:flex; gap:8px; margin-bottom:4px; font-size:0.85rem; flex-wrap:wrap; }
+.card .row .label { color:var(--text2); flex-shrink:0; min-width:100px; max-width:45%; }
+.card .row > span:last-child { flex:1; min-width:0; word-break:break-word; overflow-wrap:break-word; text-align:right; }
 .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
 .stat { background:var(--surface2); border-radius:8px; padding:14px; text-align:center; border:1px solid var(--border); }
 .stat .num { font-size:1.6rem; font-weight:700; color:var(--accent2); }
@@ -189,19 +190,12 @@ async function decryptUnifiV2(data) {
   const aligned = ciphertext.slice(0, alignedLen);
   const keyBytes = hexToBytes(UNIFI_V2_KEY_HEX);
 
-  // Try standard decrypt first (strips PKCS7 padding = clean data)
   let decrypted;
   try {
     decrypted = await decryptAesCbcStandard(aligned, keyBytes, iv);
-    console.log('Decrypted with standard PKCS7:', decrypted.byteLength, 'bytes');
   } catch(e) {
-    console.log('Standard decrypt failed, using no-padding fallback:', e.message);
     decrypted = await decryptAesCbcNoPadding(aligned, keyBytes, iv);
   }
-
-  // Check first bytes of decrypted data
-  const firstBytes = new Uint8Array(decrypted.slice(0, 16));
-  console.log('Decrypted first 16 bytes:', Array.from(firstBytes).map(b => b.toString(16).padStart(2,'0')).join(' '));
 
   // Decompress gzip
   return await decompressGzip(decrypted);
@@ -209,8 +203,6 @@ async function decryptUnifiV2(data) {
 
 async function decompressGzip(data) {
   const input = new Uint8Array(data);
-  console.log('Decompressing gzip, input size:', input.byteLength, 'first bytes:', input[0].toString(16), input[1].toString(16));
-
   const ds = new DecompressionStream('gzip');
   const writer = ds.writable.getWriter();
   const reader = ds.readable.getReader();
@@ -235,13 +227,12 @@ async function decompressGzip(data) {
       chunks.push(value);
     }
   } catch(e) {
-    console.log('Gzip reader error (expected with trailing data):', e.message, '- collected', chunks.length, 'chunks');
+    // Expected with trailing data after gzip stream
   }
 
   await writePromise.catch(() => {});
 
   const totalLen = chunks.reduce((s,c) => s + c.byteLength, 0);
-  console.log('Decompressed:', data.byteLength, '->', totalLen, 'bytes');
   if (totalLen === 0) throw new Error('Gzip decompression produced no output');
   const result = new Uint8Array(totalLen);
   let offset = 0;
@@ -265,8 +256,6 @@ function parseTar(buffer) {
   const files = {};
   const data = new Uint8Array(buffer);
   let offset = 0;
-  console.log('parseTar: buffer size =', buffer.byteLength, 'first bytes:', Array.from(data.slice(0,20)).map(b=>b.toString(16).padStart(2,'0')).join(' '));
-
   while (offset < data.length - 512) {
     // Check for end-of-archive (two zero blocks)
     let allZero = true;
@@ -306,7 +295,6 @@ function parseTar(buffer) {
     }
     offset += Math.ceil(size / 512) * 512;
   }
-  console.log('parseTar: found', Object.keys(files).length, 'files:', Object.keys(files).slice(0, 10));
   return files;
 }
 
@@ -357,7 +345,6 @@ function parseZip(buffer) {
 // ─── Gzip Decompress (sync via DecompressionStream) ──────────────────
 
 async function gunzip(buffer) {
-  console.log('gunzip: input size =', buffer.byteLength);
   return await decompressGzip(buffer);
 }
 
@@ -854,7 +841,13 @@ function buildSettings(db) {
       } else if (typeof v === 'boolean') {
         displayVal = v ? badge('Enabled','green') : badge('Disabled','gray');
       } else if (typeof v === 'object') {
-        displayVal = `<span class="mono" style="font-size:0.8rem">${esc(JSON.stringify(v).slice(0,200))}</span>`;
+        const json = JSON.stringify(v);
+        if (json.length > 80) {
+          const count = Array.isArray(v) ? `${v.length} items` : `${Object.keys(v).length} keys`;
+          displayVal = `<details><summary class="mono" style="font-size:0.8rem">${esc(count)}</summary><pre style="font-size:0.75rem;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;margin-top:4px;padding:6px;background:rgba(0,0,0,0.2);border-radius:4px">${esc(JSON.stringify(v, null, 1))}</pre></details>`;
+        } else {
+          displayVal = `<span class="mono" style="font-size:0.8rem">${esc(json)}</span>`;
+        }
       } else {
         displayVal = esc(v);
       }
@@ -1111,8 +1104,9 @@ tr:hover td { background:rgba(59,130,246,0.05); }
 .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
 .card { background:var(--surface2); border-radius:8px; padding:16px; border:1px solid var(--border); }
 .card h4 { margin-bottom:8px; font-size:0.95rem; }
-.card .row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem; }
-.card .row .label { color:var(--text2); }
+.card .row { display:flex; gap:8px; margin-bottom:4px; font-size:0.85rem; flex-wrap:wrap; }
+.card .row .label { color:var(--text2); flex-shrink:0; min-width:100px; max-width:45%; }
+.card .row > span:last-child { flex:1; min-width:0; word-break:break-word; overflow-wrap:break-word; text-align:right; }
 .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
 .stat { background:var(--surface2); border-radius:8px; padding:14px; text-align:center; border:1px solid var(--border); }
 .stat .num { font-size:1.6rem; font-weight:700; color:var(--accent2); }
@@ -1205,10 +1199,8 @@ async function processFile(file) {
     setStatus('Extracting archive...');
     setProgress(50);
 
-    console.log('Decrypted+decompressed size:', decrypted.byteLength);
     let files;
     const firstBytes = new Uint8Array(decrypted.slice(0, 4));
-    console.log('First 4 bytes:', Array.from(firstBytes).map(b => b.toString(16).padStart(2,'0')).join(' '));
     if (firstBytes[0] === 0x50 && firstBytes[1] === 0x4B) {
       // ZIP (legacy .unf)
       files = parseZip(decrypted);
