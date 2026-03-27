@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UniFi Backup Explorer</title>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+  --border: #475569; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #3b82f6; --accent2: #60a5fa;
+  --green: #22c55e; --orange: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.6; }
+.container { max-width:1200px; margin:0 auto; padding:20px; }
+
+/* Upload screen */
+#upload-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:80vh; }
+#upload-screen h1 { font-size:2rem; margin-bottom:8px; }
+#upload-screen p { color:var(--text2); margin-bottom:24px; }
+.drop-zone { width:100%; max-width:600px; border:3px dashed var(--border); border-radius:16px;
+  padding:60px 40px; text-align:center; cursor:pointer; transition:all 0.2s; background:var(--surface); }
+.drop-zone:hover, .drop-zone.dragover { border-color:var(--accent); background:rgba(59,130,246,0.08); }
+.drop-zone h2 { font-size:1.2rem; margin-bottom:8px; }
+.drop-zone p { font-size:0.9rem; color:var(--text2); }
+.drop-zone input { display:none; }
+#status { margin-top:20px; color:var(--accent2); font-size:0.9rem; min-height:24px; }
+.progress-bar { width:100%; max-width:600px; height:6px; background:var(--surface2); border-radius:3px; margin-top:12px; overflow:hidden; display:none; }
+.progress-bar .fill { height:100%; background:var(--accent); width:0; transition:width 0.3s; border-radius:3px; }
+
+/* Report view */
+#report-view { display:none; }
+header { background:linear-gradient(135deg,#1e3a5f,#0f172a); padding:30px; border-radius:12px;
+  margin-bottom:24px; border:1px solid var(--border); }
+header h1 { font-size:1.8rem; margin-bottom:8px; }
+header .meta { color:var(--text2); font-size:0.9rem; }
+header .meta span { margin-right:20px; }
+.toolbar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+.toolbar button { background:var(--accent); color:white; border:none; padding:10px 20px;
+  border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; }
+.toolbar button:hover { background:var(--accent2); }
+.toolbar button.secondary { background:var(--surface2); border:1px solid var(--border); }
+.toolbar button.secondary:hover { background:var(--border); }
+nav { background:var(--surface); padding:16px 20px; border-radius:10px;
+  margin-bottom:24px; border:1px solid var(--border); }
+nav h3 { margin-bottom:10px; color:var(--accent2); font-size:0.85rem; text-transform:uppercase; letter-spacing:1px; }
+nav ul { list-style:none; display:flex; flex-wrap:wrap; gap:6px 16px; }
+nav a { color:var(--accent2); text-decoration:none; font-size:0.88rem; }
+nav a:hover { text-decoration:underline; }
+section { background:var(--surface); border-radius:10px; padding:24px;
+  margin-bottom:20px; border:1px solid var(--border); }
+section h2 { font-size:1.3rem; margin-bottom:16px; padding-bottom:8px;
+  border-bottom:2px solid var(--accent); }
+h3 { font-size:1.05rem; margin:18px 0 10px; color:var(--accent2); }
+table { width:100%; border-collapse:collapse; margin:10px 0; font-size:0.88rem; }
+th { background:var(--surface2); text-align:left; padding:8px 12px; font-weight:600;
+  border-bottom:2px solid var(--border); white-space:nowrap; }
+td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+tr:hover td { background:rgba(59,130,246,0.05); }
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.78rem;
+  font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.badge-green { background:rgba(34,197,94,0.15); color:var(--green); }
+.badge-orange { background:rgba(245,158,11,0.15); color:var(--orange); }
+.badge-red { background:rgba(239,68,68,0.15); color:var(--red); }
+.badge-blue { background:rgba(59,130,246,0.15); color:var(--blue); }
+.badge-gray { background:rgba(148,163,184,0.15); color:var(--text2); }
+.badge-purple { background:rgba(168,85,247,0.15); color:#a855f7; }
+.card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+.card { background:var(--surface2); border-radius:8px; padding:16px; border:1px solid var(--border); }
+.card h4 { margin-bottom:8px; font-size:0.95rem; }
+.card .row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem; }
+.card .row .label { color:var(--text2); }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+.stat { background:var(--surface2); border-radius:8px; padding:14px; text-align:center; border:1px solid var(--border); }
+.stat .num { font-size:1.6rem; font-weight:700; color:var(--accent2); }
+.stat .lbl { font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+.finding { padding:10px 14px; margin:6px 0; border-radius:6px; font-size:0.88rem; border-left:4px solid; }
+.finding-ok { background:rgba(34,197,94,0.08); border-color:var(--green); }
+.finding-info { background:rgba(59,130,246,0.08); border-color:var(--blue); }
+.finding-warn { background:rgba(245,158,11,0.08); border-color:var(--orange); }
+.finding-critical { background:rgba(239,68,68,0.08); border-color:var(--red); }
+.mono { font-family:'SF Mono',Consolas,monospace; font-size:0.84rem; }
+.sensitive { color:var(--orange); cursor:help; }
+.muted { color:var(--text2); }
+@media(max-width:768px) {
+  .card-grid { grid-template-columns:1fr; }
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  table { font-size:0.8rem; }
+  th,td { padding:6px 8px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Upload Screen -->
+<div id="upload-screen">
+  <h1>UniFi Backup Explorer</h1>
+  <p>Client-side decryption and analysis — nothing leaves your browser</p>
+  <div class="drop-zone" id="drop-zone">
+    <h2>Drop your backup file here</h2>
+    <p>or click to browse — supports .unifi (v2) and .unf (legacy)</p>
+    <input type="file" id="file-input" accept=".unifi,.unf">
+  </div>
+  <div class="progress-bar" id="progress-bar"><div class="fill" id="progress-fill"></div></div>
+  <div id="status"></div>
+</div>
+
+<!-- Report View (hidden until generated) -->
+<div id="report-view"></div>
+
+</div>
+
+<script>
+// ─── Utility ──────────────────────────────────────────────────────────
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function badge(text, colour) {
+  colour = colour || 'gray';
+  return `<span class="badge badge-${colour}">${esc(text)}</span>`;
+}
+
+function severityBadge(level, text) {
+  const colours = {ok:'green', info:'blue', warn:'orange', critical:'red'};
+  return `<span class="badge badge-${colours[level]||'gray'}">${esc(text)}</span>`;
+}
+
+function mask(value, show) {
+  show = show || 4;
+  if (!value || typeof value !== 'string') return value ? String(value) : '';
+  if (value.length <= show) return '****';
+  return '\u2022'.repeat(value.length - show) + value.slice(-show);
+}
+
+function tsToStr(ts) {
+  if (ts == null) return 'N/A';
+  if (typeof ts === 'string') return ts;
+  if (ts > 1e12) ts = ts / 1000;
+  try { return new Date(ts * 1000).toISOString().replace('T',' ').replace(/\.\d+Z/,' UTC'); }
+  catch(e) { return String(ts); }
+}
+
+// ─── AES Decryption (Web Crypto API) ─────────────────────────────────
+
+const UNIFI_V2_KEY_HEX = 'e383b7c53698b36d4baea4ed22181ef73676bfd5d5b90005d9845ffd5dce985f';
+const UNF_KEY = new TextEncoder().encode('bcyangkmluohmars');
+const UNF_IV  = new TextEncoder().encode('ubntenterpriseap');
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2)
+    bytes[i/2] = parseInt(hex.substr(i, 2), 16);
+  return bytes;
+}
+
+// AES-CBC decrypt with standard PKCS7 padding removal
+async function decryptAesCbcStandard(ciphertext, keyBytes, ivBytes) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, {name:'AES-CBC'}, false, ['decrypt']);
+  return await crypto.subtle.decrypt({name:'AES-CBC', iv:ivBytes}, key, ciphertext);
+}
+
+// AES-CBC decryption without padding validation using Web Crypto
+// Trick: append a fake block with valid PKCS7 padding so WebCrypto is happy
+async function decryptAesCbcNoPadding(data, keyBytes, ivBytes) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, {name:'AES-CBC'}, false, ['decrypt']);
+  const paddingBlock = new Uint8Array(16).fill(16);
+  const lastBlock = new Uint8Array(data.slice(data.byteLength - 16));
+  const encKey = await crypto.subtle.importKey('raw', keyBytes, {name:'AES-CBC'}, false, ['encrypt']);
+  const fakeCipherBlock = await crypto.subtle.encrypt({name:'AES-CBC', iv:lastBlock}, encKey, paddingBlock);
+  const combined = new Uint8Array(data.byteLength + 16);
+  combined.set(new Uint8Array(data), 0);
+  combined.set(new Uint8Array(fakeCipherBlock).slice(0, 16), data.byteLength);
+  const result = await crypto.subtle.decrypt({name:'AES-CBC', iv:ivBytes}, key, combined.buffer);
+  return result.slice(0, data.byteLength);
+}
+
+async function decryptUnifiV2(data) {
+  const iv = new Uint8Array(data.slice(0, 16));
+  const ciphertext = data.slice(16);
+  const alignedLen = Math.floor(ciphertext.byteLength / 16) * 16;
+  const aligned = ciphertext.slice(0, alignedLen);
+  const keyBytes = hexToBytes(UNIFI_V2_KEY_HEX);
+
+  // Try standard decrypt first (strips PKCS7 padding = clean data)
+  let decrypted;
+  try {
+    decrypted = await decryptAesCbcStandard(aligned, keyBytes, iv);
+    console.log('Decrypted with standard PKCS7:', decrypted.byteLength, 'bytes');
+  } catch(e) {
+    console.log('Standard decrypt failed, using no-padding fallback:', e.message);
+    decrypted = await decryptAesCbcNoPadding(aligned, keyBytes, iv);
+  }
+
+  // Check first bytes of decrypted data
+  const firstBytes = new Uint8Array(decrypted.slice(0, 16));
+  console.log('Decrypted first 16 bytes:', Array.from(firstBytes).map(b => b.toString(16).padStart(2,'0')).join(' '));
+
+  // Decompress gzip
+  return await decompressGzip(decrypted);
+}
+
+async function decompressGzip(data) {
+  const input = new Uint8Array(data);
+  console.log('Decompressing gzip, input size:', input.byteLength, 'first bytes:', input[0].toString(16), input[1].toString(16));
+
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
+
+  // Write and close — collect any errors but don't block reading
+  let writeError = null;
+  const writePromise = (async () => {
+    try {
+      await writer.write(input);
+      await writer.close();
+    } catch(e) {
+      writeError = e;
+      try { writer.close(); } catch(e2) {}
+    }
+  })();
+
+  const chunks = [];
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+  } catch(e) {
+    console.log('Gzip reader error (expected with trailing data):', e.message, '- collected', chunks.length, 'chunks');
+  }
+
+  await writePromise.catch(() => {});
+
+  const totalLen = chunks.reduce((s,c) => s + c.byteLength, 0);
+  console.log('Decompressed:', data.byteLength, '->', totalLen, 'bytes');
+  if (totalLen === 0) throw new Error('Gzip decompression produced no output');
+  const result = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const c of chunks) { result.set(c, offset); offset += c.byteLength; }
+  return result.buffer;
+}
+
+async function decryptUnf(data) {
+  const alignedLen = Math.floor(data.byteLength / 16) * 16;
+  const aligned = data.slice(0, alignedLen);
+  try {
+    return await decryptAesCbcStandard(aligned, UNF_KEY, UNF_IV);
+  } catch(e) {
+    return await decryptAesCbcNoPadding(aligned, UNF_KEY, UNF_IV);
+  }
+}
+
+// ─── Tar Parser ──────────────────────────────────────────────────────
+
+function parseTar(buffer) {
+  const files = {};
+  const data = new Uint8Array(buffer);
+  let offset = 0;
+  console.log('parseTar: buffer size =', buffer.byteLength, 'first bytes:', Array.from(data.slice(0,20)).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+
+  while (offset < data.length - 512) {
+    // Check for end-of-archive (two zero blocks)
+    let allZero = true;
+    for (let i = 0; i < 512; i++) { if (data[offset + i] !== 0) { allZero = false; break; } }
+    if (allZero) break;
+
+    // Parse header
+    const nameRaw = new TextDecoder().decode(data.slice(offset, offset + 100)).replace(/\0.*/, '');
+    const sizeOctal = new TextDecoder().decode(data.slice(offset + 124, offset + 136)).replace(/\0.*/, '').trim();
+    const typeFlag = data[offset + 156];
+    const prefix = new TextDecoder().decode(data.slice(offset + 345, offset + 500)).replace(/\0.*/, '');
+
+    let name = prefix ? prefix + '/' + nameRaw : nameRaw;
+    let size = parseInt(sizeOctal, 8) || 0;
+
+    // Handle GNU long name
+    if (typeFlag === 76) { // 'L' = GNU long name
+      const longName = new TextDecoder().decode(data.slice(offset + 512, offset + 512 + size)).replace(/\0.*/, '');
+      offset += 512 + Math.ceil(size / 512) * 512;
+      // Next header is the actual file
+      const nextSizeOctal = new TextDecoder().decode(data.slice(offset + 124, offset + 136)).replace(/\0.*/, '').trim();
+      const nextTypeFlag = data[offset + 156];
+      size = parseInt(nextSizeOctal, 8) || 0;
+      name = longName;
+      if (nextTypeFlag === 48 || nextTypeFlag === 0) { // regular file
+        files[name] = data.slice(offset + 512, offset + 512 + size).buffer;
+      }
+      offset += 512 + Math.ceil(size / 512) * 512;
+      continue;
+    }
+
+    offset += 512;
+    if (typeFlag === 48 || typeFlag === 0) { // regular file '0' or null
+      if (name && size > 0) {
+        files[name] = data.slice(offset, offset + size).buffer;
+      }
+    }
+    offset += Math.ceil(size / 512) * 512;
+  }
+  console.log('parseTar: found', Object.keys(files).length, 'files:', Object.keys(files).slice(0, 10));
+  return files;
+}
+
+// ─── ZIP Parser (for legacy .unf) ────────────────────────────────────
+
+function parseZip(buffer) {
+  // Minimal ZIP parser for legacy backups
+  const files = {};
+  const data = new Uint8Array(buffer);
+
+  // Find End of Central Directory
+  let eocdOffset = -1;
+  for (let i = data.length - 22; i >= 0; i--) {
+    if (data[i]===0x50 && data[i+1]===0x4B && data[i+2]===0x05 && data[i+3]===0x06) {
+      eocdOffset = i; break;
+    }
+  }
+
+  // Parse local file headers directly
+  let offset = 0;
+  while (offset < data.length - 30) {
+    if (data[offset]!==0x50 || data[offset+1]!==0x4B || data[offset+2]!==0x03 || data[offset+3]!==0x04) break;
+    const view = new DataView(buffer, offset);
+    const method = view.getUint16(8, true);
+    const compSize = view.getUint32(18, true);
+    const uncompSize = view.getUint32(22, true);
+    const nameLen = view.getUint16(26, true);
+    const extraLen = view.getUint16(28, true);
+    const name = new TextDecoder().decode(data.slice(offset + 30, offset + 30 + nameLen));
+    const fileDataStart = offset + 30 + nameLen + extraLen;
+
+    if (method === 0) { // stored
+      files[name] = data.slice(fileDataStart, fileDataStart + compSize).buffer;
+    } else if (method === 8) { // deflate
+      try {
+        const compressed = data.slice(fileDataStart, fileDataStart + compSize);
+        const ds = new DecompressionStream('deflate-raw');
+        // Sync approach won't work, store compressed for now
+        files[name] = compressed.buffer;
+        files[name + '__deflate'] = true;
+      } catch(e) {}
+    }
+    offset = fileDataStart + compSize;
+  }
+  return files;
+}
+
+// ─── Gzip Decompress (sync via DecompressionStream) ──────────────────
+
+async function gunzip(buffer) {
+  console.log('gunzip: input size =', buffer.byteLength);
+  return await decompressGzip(buffer);
+}
+
+// ─── BSON Parser ─────────────────────────────────────────────────────
+
+function parseBsonDoc(data, offset) {
+  offset = offset || 0;
+  if (offset + 4 > data.byteLength) return [null, 0];
+  const view = new DataView(data, offset);
+  const docLen = view.getInt32(0, true);
+  if (docLen < 5 || offset + docLen > data.byteLength) return [null, 0];
+  const result = {};
+  let pos = offset + 4;
+  const end = offset + docLen - 1;
+  const bytes = new Uint8Array(data);
+
+  while (pos < end) {
+    const elemType = bytes[pos]; pos++;
+    let nameEnd = pos;
+    while (nameEnd < end && bytes[nameEnd] !== 0) nameEnd++;
+    const name = new TextDecoder('utf-8', {fatal:false}).decode(bytes.slice(pos, nameEnd));
+    pos = nameEnd + 1;
+    let val;
+
+    switch (elemType) {
+      case 0x01: // double
+        val = new DataView(data, pos).getFloat64(0, true); pos += 8; break;
+      case 0x02: { // string
+        const sl = new DataView(data, pos).getInt32(0, true); pos += 4;
+        val = new TextDecoder('utf-8', {fatal:false}).decode(bytes.slice(pos, pos + sl - 1)); pos += sl; break;
+      }
+      case 0x03: { // document
+        const [d, c] = parseBsonDoc(data, pos); val = d; pos += c; break;
+      }
+      case 0x04: { // array
+        const [d, c] = parseBsonDoc(data, pos);
+        val = d ? Object.keys(d).sort((a,b) => parseInt(a)-parseInt(b)).map(k => d[k]) : [];
+        pos += c; break;
+      }
+      case 0x05: { // binary
+        const bl = new DataView(data, pos).getInt32(0, true); pos += 5;
+        val = Array.from(bytes.slice(pos, pos + bl)).map(b => b.toString(16).padStart(2,'0')).join('');
+        pos += bl; break;
+      }
+      case 0x07: { // objectid
+        val = Array.from(bytes.slice(pos, pos + 12)).map(b => b.toString(16).padStart(2,'0')).join('');
+        pos += 12; break;
+      }
+      case 0x08: // bool
+        val = bytes[pos] !== 0; pos += 1; break;
+      case 0x09: { // datetime
+        const lo = new DataView(data, pos).getUint32(0, true);
+        const hi = new DataView(data, pos + 4).getInt32(0, true);
+        const ms = hi * 0x100000000 + lo;
+        try { val = new Date(ms).toISOString(); } catch(e) { val = `epoch_ms:${ms}`; }
+        pos += 8; break;
+      }
+      case 0x0A: // null
+        val = null; break;
+      case 0x0B: { // regex
+        let pe = pos; while (pe < end && bytes[pe]) pe++;
+        const pat = new TextDecoder().decode(bytes.slice(pos, pe)); pos = pe + 1;
+        let oe = pos; while (oe < end && bytes[oe]) oe++;
+        const opt = new TextDecoder().decode(bytes.slice(pos, oe)); pos = oe + 1;
+        val = `/${pat}/${opt}`; break;
+      }
+      case 0x10: // int32
+        val = new DataView(data, pos).getInt32(0, true); pos += 4; break;
+      case 0x11: { // timestamp
+        const lo = new DataView(data, pos).getUint32(0, true);
+        const hi = new DataView(data, pos + 4).getUint32(0, true);
+        val = hi * 0x100000000 + lo; pos += 8; break;
+      }
+      case 0x12: { // int64
+        const lo = new DataView(data, pos).getUint32(0, true);
+        const hi = new DataView(data, pos + 4).getInt32(0, true);
+        val = hi * 0x100000000 + lo; pos += 8; break;
+      }
+      case 0xFF: case 0x7F: case 0x06:
+        val = null; break;
+      default:
+        return [result, docLen]; // unknown type, stop
+    }
+    result[name] = val;
+  }
+  return [result, docLen];
+}
+
+function parseBsonStream(data) {
+  const docs = [];
+  let offset = 0;
+  while (offset < data.byteLength - 4) {
+    const [doc, consumed] = parseBsonDoc(data, offset);
+    if (doc === null || consumed === 0) break;
+    docs.push(doc);
+    offset += consumed;
+  }
+  return docs;
+}
+
+function loadNetworkDb(buffer) {
+  const docs = parseBsonStream(buffer);
+  const collections = {};
+  let current = null;
+  for (const doc of docs) {
+    if (doc.__cmd === 'select' && doc.collection) {
+      current = doc.collection;
+      if (!collections[current]) collections[current] = [];
+    } else if (current) {
+      collections[current].push(doc);
+    }
+  }
+  return collections;
+}
+
+// ─── Report Builder ──────────────────────────────────────────────────
+
+function buildOverview(meta, db, files) {
+  const counts = {
+    networkconf: (db.networkconf||[]).length,
+    wlanconf: (db.wlanconf||[]).length,
+    device: (db.device||[]).length,
+    user: (db.user||[]).length,
+    firewallrule: (db.firewallrule||[]).length,
+    firewall_policy: (db.firewall_policy||[]).length,
+    portforward: (db.portforward||[]).length,
+    wireguard_user: (db.wireguard_user||[]).length,
+    teleport_client: (db.teleport_client||[]).length,
+  };
+
+  let h = '<div class="stat-grid">';
+  const stats = [
+    [counts.networkconf, 'Networks/VLANs'], [counts.wlanconf, 'WiFi SSIDs'],
+    [counts.device, 'Devices'], [counts.user, 'Known Clients'],
+    [counts.firewallrule + counts.firewall_policy, 'Firewall Rules'],
+    [counts.portforward, 'Port Forwards'],
+    [counts.wireguard_user, 'VPN Users'], [counts.teleport_client, 'Teleport Clients'],
+  ];
+  for (const [num, lbl] of stats) {
+    h += `<div class="stat"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+  }
+  h += '</div>';
+
+  // Package versions
+  const pkgData = getJsonFile(files, 'backup/package-versions.json');
+  if (pkgData) {
+    const apps = {...(pkgData.controllers||{}), ...(pkgData.services||{})};
+    h += '<h3>Application Versions</h3><table><tr><th>Application</th><th>Version</th></tr>';
+    for (const [app, ver] of Object.entries(apps).sort()) {
+      h += `<tr><td>${esc(app.charAt(0).toUpperCase()+app.slice(1))}</td><td class="mono">${esc(ver)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  // Console settings (YAML — parse as simple key:value)
+  const settingsText = getTextFile(files, 'backup/ucore/config/settings.yaml');
+  if (settingsText) {
+    const settings = parseSimpleYaml(settingsText);
+    if (settings.name || settings.timezone) {
+      h += '<h3>Console Settings</h3><table>';
+      const rows = [['Name', settings.name], ['Timezone', settings.timezone]];
+      for (const [k, v] of rows) { if (v) h += `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`; }
+      h += '</table>';
+    }
+  }
+
+  // System data
+  const sysData = getJsonFile(files, 'backup/ucore/system-data.json');
+  if (sysData) {
+    h += '<h3>System</h3><table>';
+    h += `<tr><td>Hostname</td><td><strong>${esc(sysData.hostname||'')}</strong></td></tr>`;
+    h += `<tr><td>SSH Enabled</td><td>${sysData.sshEnabled ? badge('Enabled','orange') : badge('Disabled','green')}</td></tr>`;
+    if (sysData.hashedSshPassword) {
+      h += `<tr><td>SSH Password Hash</td><td class="mono sensitive">${esc(String(sysData.hashedSshPassword).slice(0,50))}...</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  return h;
+}
+
+function buildUsers(files) {
+  const users = getJsonFile(files, 'backup/ucore/config/cache/users.json');
+  if (!users || !Array.isArray(users) || users.length === 0)
+    return '<p class="muted">No cached users found.</p>';
+
+  let h = `<p>Total accounts: <strong>${users.length}</strong></p><div class="card-grid">`;
+  for (const u of users) {
+    const roles = (u.roles||[]).filter(r => r && typeof r === 'object').map(r => r.name||'?');
+    const roleBadges = roles.map(r => badge(r, 'purple')).join(' ');
+    const perms = u.permissions || {};
+    const adminPerms = typeof perms === 'object' ? Object.keys(perms).filter(k => Array.isArray(perms[k]) && perms[k].includes('admin')).sort() : [];
+
+    h += `<div class="card">
+      <h4>${esc(u.full_name||'Unknown')} ${roleBadges}</h4>
+      <div class="row"><span class="label">Email</span><span>${esc(u.email||'')}</span></div>
+      <div class="row"><span class="label">SSO Username</span><span class="mono">${esc(u.sso_username||'')}</span></div>
+      <div class="row"><span class="label">Status</span><span>${badge(u.status||'', u.status==='ACTIVE'?'green':'gray')}</span></div>
+      <div class="row"><span class="label">Last Login</span><span>${esc(tsToStr(u.login_time))}</span></div>
+      <div class="row"><span class="label">Created</span><span>${esc(tsToStr(u.create_time))}</span></div>`;
+    if (adminPerms.length) {
+      h += `<div class="row"><span class="label">Admin</span><span style="font-size:0.8rem">${esc(adminPerms.join(', '))}</span></div>`;
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function buildNetworks(db) {
+  const nets = db.networkconf || [];
+  if (!nets.length) return '<p class="muted">No networks configured.</p>';
+
+  const wans = nets.filter(n => n.purpose === 'wan');
+  const vpns = nets.filter(n => ['remote-user-vpn','site-vpn'].includes(n.purpose));
+  const lans = nets.filter(n => !['wan','remote-user-vpn','site-vpn'].includes(n.purpose));
+
+  let h = '';
+  if (wans.length) {
+    h += '<h3>WAN Interfaces</h3><table><tr><th>Name</th><th>Type</th><th>WAN IP</th></tr>';
+    for (const w of wans)
+      h += `<tr><td>${esc(w.name||'')}</td><td>${esc(w.wan_type||'dhcp')}</td><td class="mono">${esc(w.wan_ip||'DHCP')}</td></tr>`;
+    h += '</table>';
+  }
+
+  if (lans.length) {
+    h += '<h3>LAN Networks</h3><table><tr><th>Name</th><th>VLAN</th><th>Subnet</th><th>Purpose</th><th>DHCP Range</th><th>DNS</th><th>Domain</th></tr>';
+    lans.sort((a,b) => (a.vlan||a.vlan_tag||0) - (b.vlan||b.vlan_tag||0));
+    for (const n of lans) {
+      const vlan = n.vlan || n.vlan_tag || n.vlan_id || '';
+      const dhcp = n.dhcpd_enabled ? `${n.dhcpd_start||''}&nbsp;-&nbsp;${n.dhcpd_stop||''}` : '<span class="muted">Off</span>';
+      const dns = [n.dhcpd_dns_1, n.dhcpd_dns_2, n.dhcpd_dns_3].filter(Boolean).join(', ');
+      h += `<tr><td><strong>${esc(n.name||'')}</strong></td><td>${esc(vlan)}</td>
+        <td class="mono">${esc(n.ip_subnet||'')}</td><td>${badge(n.purpose||'','blue')}</td>
+        <td class="mono">${dhcp}</td><td class="mono" style="font-size:0.8rem">${esc(dns)}</td>
+        <td>${esc(n.domain_name||'')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  if (vpns.length) {
+    h += '<h3>VPN Networks</h3><table><tr><th>Name</th><th>Type</th><th>Subnet</th><th>DNS</th></tr>';
+    for (const v of vpns) {
+      const dns = [v.dhcpd_dns_1, v.dhcpd_dns_2, v.dhcpd_dns_3].filter(Boolean).join(', ');
+      h += `<tr><td><strong>${esc(v.name||'')}</strong></td><td>${badge(v.purpose||'','purple')}</td>
+        <td class="mono">${esc(v.ip_subnet||'')}</td><td class="mono">${esc(dns)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+  return h;
+}
+
+function buildWlans(db) {
+  const wlans = (db.wlanconf || []).slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  if (!wlans.length) return '<p class="muted">No wireless networks configured.</p>';
+
+  let h = '<div class="card-grid">';
+  for (const w of wlans) {
+    const sec = w.security || 'open';
+    const secText = sec + (w.wpa_mode ? ` / ${w.wpa_mode} / ${w.wpa_enc||''}` : '');
+    const enabled = w.enabled !== false;
+    const enBadge = enabled ? badge('Active','green') : badge('Disabled','gray');
+    const flags = [];
+    if (w.is_guest) flags.push(badge('Guest','orange'));
+    if (w.hide_ssid) flags.push(badge('Hidden','gray'));
+
+    h += `<div class="card">
+      <h4>${esc(w.name||'')} ${enBadge} ${flags.join(' ')}</h4>
+      <div class="row"><span class="label">Security</span><span>${esc(secText)}</span></div>
+      <div class="row"><span class="label">Passphrase</span><span class="mono sensitive">${esc(mask(w.x_passphrase,4))}</span></div>
+      <div class="row"><span class="label">Band</span><span>${esc(w.wlan_band||'both')}</span></div>
+      <div class="row"><span class="label">PMF (802.11w)</span><span>${esc(w.pmf_mode||'N/A')}</span></div>`;
+    if (w.mac_filter_enabled) h += `<div class="row"><span class="label">MAC Filter</span><span>${badge('Enabled','orange')}</span></div>`;
+    if (w.radius_profile_id) h += `<div class="row"><span class="label">RADIUS</span><span>Configured</span></div>`;
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function buildDevices(db) {
+  const devices = (db.device || []).slice().sort((a,b) => (a.name||a.hostname||'zzz').localeCompare(b.name||b.hostname||'zzz'));
+  if (!devices.length) return '<p class="muted">No devices found.</p>';
+
+  const typeIcons = {udm:'Gateway', usw:'Switch', uap:'Access Point', ugw:'Gateway'};
+
+  let h = '<table><tr><th>Name</th><th>Model</th><th>Type</th><th>IP Address</th><th>MAC</th><th>Firmware</th><th>Adopted</th></tr>';
+  for (const d of devices) {
+    const name = d.name || d.hostname || '';
+    const typeLabel = typeIcons[d.type] || d.type || '';
+    const adopted = d.adopted || false;
+    let ip = d.ip || '';
+    const configIp = d.config_network && typeof d.config_network === 'object' ? d.config_network.ip || '' : '';
+    if (configIp && configIp !== ip) ip += ` <span class="muted">(${esc(configIp)})</span>`;
+
+    h += `<tr><td><strong>${esc(name) || '<span class="muted">Unnamed</span>'}</strong></td>
+      <td class="mono">${esc(d.model||'')}</td><td>${badge(typeLabel,'blue')}</td>
+      <td class="mono">${ip}</td><td class="mono">${esc(d.mac||'')}</td>
+      <td class="mono">${esc(d.version||'')}</td>
+      <td>${adopted ? badge('Yes','green') : badge('No','red')}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function buildClients(db) {
+  const clients = (db.user || []).slice().sort((a,b) => (a.name||a.hostname||a.mac||'').localeCompare(b.name||b.hostname||b.mac||''));
+  if (!clients.length) return '<p class="muted">No known clients.</p>';
+
+  const named = clients.filter(c => c.name || c.hostname);
+  const unnamed = clients.filter(c => !c.name && !c.hostname);
+
+  let h = `<p>Total known clients: <strong>${clients.length}</strong> (${named.length} named, ${unnamed.length} unnamed)</p>`;
+  h += '<table><tr><th>Name</th><th>MAC</th><th>Fixed IP</th><th>Note</th><th>Flags</th></tr>';
+  for (const c of clients) {
+    const name = c.name || c.hostname || '';
+    const mac = c.mac || '';
+    const fixedIp = c.use_fixedip ? (c.fixed_ip||'') : '';
+    const flags = c.blocked ? badge('BLOCKED','red') : '';
+    h += `<tr><td>${esc(name) || `<span class="muted">${esc(mac)}</span>`}</td>
+      <td class="mono">${esc(mac)}</td><td class="mono">${esc(fixedIp)}</td>
+      <td style="font-size:0.82rem">${esc(c.note||'')}</td><td>${flags}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function buildFirewall(db) {
+  const groups = db.firewallgroup || [];
+  const rules = db.firewallrule || [];
+  const policies = db.firewall_policy || [];
+  let h = '';
+
+  if (groups.length) {
+    h += `<h3>Firewall Groups (${groups.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>Type</th><th>Members</th></tr>';
+    for (const g of groups.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))) {
+      const members = Array.isArray(g.group_members) ? g.group_members : [];
+      let memberStr = members.slice(0,15).join(', ');
+      if (members.length > 15) memberStr += ` ... +${members.length-15} more`;
+      h += `<tr><td><strong>${esc(g.name||'')}</strong></td><td>${esc(g.group_type||'')}</td><td class="mono" style="font-size:0.82rem">${esc(memberStr)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  if (rules.length) {
+    h += `<h3>Custom Firewall Rules (${rules.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>Ruleset</th><th>Action</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Port</th><th>Enabled</th></tr>';
+    rules.sort((a,b) => (a.ruleset||'').localeCompare(b.ruleset||'') || (a.rule_index||0)-(b.rule_index||0));
+    for (const r of rules) {
+      const en = r.enabled !== false;
+      const actionColour = r.action==='drop'?'red' : r.action==='accept'?'green' : 'gray';
+      h += `<tr><td>${esc(r.name||'')}</td><td class="mono">${esc(r.ruleset||'')}</td>
+        <td>${badge(r.action||'',actionColour)}</td><td>${esc(r.protocol||'all')}</td>
+        <td class="mono" style="font-size:0.82rem">${esc(r.src_address||r.src_firewallgroup_ids||'any')}</td>
+        <td class="mono" style="font-size:0.82rem">${esc(r.dst_address||r.dst_firewallgroup_ids||'any')}</td>
+        <td class="mono">${esc(r.dst_port||'')}</td>
+        <td>${en ? badge('Yes','green') : badge('No','gray')}</td></tr>`;
+    }
+    h += '</table>';
+  } else if (!policies.length) {
+    h += '<p class="muted">No custom firewall rules configured.</p>';
+  }
+
+  if (policies.length) {
+    h += `<h3>Firewall Policies (${policies.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>Action</th><th>Enabled</th><th>Index</th></tr>';
+    policies.sort((a,b) => (a.index||0)-(b.index||0));
+    for (const p of policies) {
+      const en = p.enabled !== false;
+      const actionColour = ['BLOCK','DROP','REJECT'].includes(p.action) ? 'red' : 'green';
+      h += `<tr><td>${esc(p.name||p.description||'')}</td><td>${badge(p.action||'',actionColour)}</td>
+        <td>${en ? badge('Yes','green') : badge('No','gray')}</td><td>${esc(p.index||'')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+  return h;
+}
+
+function buildPortForwarding(db) {
+  const fwds = db.portforward || [];
+  if (!fwds.length) return '<p class="muted">No port forwarding rules configured.</p>';
+
+  let h = '<table><tr><th>Name</th><th>Protocol</th><th>Ext Port</th><th>Destination</th><th>Int Port</th><th>Source</th><th>Enabled</th></tr>';
+  for (const pf of fwds.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))) {
+    const en = pf.enabled !== false;
+    h += `<tr><td><strong>${esc(pf.name||'')}</strong></td><td>${esc(pf.proto||'tcp_udp')}</td>
+      <td class="mono">${esc(pf.dst_port||'')}</td><td class="mono">${esc(pf.fwd||'')}</td>
+      <td class="mono">${esc(pf.fwd_port||'')}</td><td class="mono">${esc(pf.src||'any')}</td>
+      <td>${en ? badge('Yes','green') : badge('No','gray')}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function buildVpn(db) {
+  const wgUsers = db.wireguard_user || [];
+  const teleport = db.teleport_client || [];
+  let h = '';
+
+  if (wgUsers.length) {
+    h += `<h3>WireGuard VPN Users (${wgUsers.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>IP</th><th>Enabled</th></tr>';
+    for (const u of wgUsers.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))) {
+      const en = u.enabled !== false;
+      h += `<tr><td>${esc(u.name||'')}</td><td class="mono">${esc(u.ip||'')}</td>
+        <td>${en ? badge('Yes','green') : badge('No','gray')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  if (teleport.length) {
+    h += `<h3>Teleport Clients (${teleport.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>IP</th><th>Status</th></tr>';
+    for (const t of teleport.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))) {
+      h += `<tr><td>${esc(t.name||'')}</td><td class="mono">${esc(t.ip||'')}</td><td>${esc(t.status||'')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  if (!h) h = '<p class="muted">No VPN users configured.</p>';
+  return h;
+}
+
+function buildRadius(db) {
+  const profiles = db.radiusprofile || [];
+  const accounts = db.account || [];
+  let h = '';
+
+  if (profiles.length) {
+    h += `<h3>RADIUS Profiles (${profiles.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>VLAN</th><th>Auth Servers</th></tr>';
+    for (const p of profiles) {
+      const servers = Array.isArray(p.auth_servers) ? p.auth_servers.filter(s=>s&&typeof s==='object').map(s=>`${s.ip||''}:${s.port||''}`).join(', ') : '';
+      h += `<tr><td>${esc(p.name||'')}</td><td>${esc(p.use_usg_auth_server||'')}</td><td class="mono">${esc(servers)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+  if (accounts.length) {
+    h += `<h3>RADIUS Accounts (${accounts.length})</h3>`;
+    h += '<table><tr><th>Name</th><th>Tunnel Type</th><th>VLAN</th></tr>';
+    for (const a of accounts) {
+      h += `<tr><td>${esc(a.name||'')}</td><td>${esc(a.tunnel_type||'')}</td><td>${esc(a.vlan||'')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+  if (!h) return '<p class="muted">No RADIUS configuration found.</p>';
+  return h;
+}
+
+function buildDns(db) {
+  const staticDns = db.static_dns || [];
+  if (!staticDns.length) return '<p class="muted">No static DNS entries.</p>';
+  let h = '<table><tr><th>Name</th><th>Record Type</th><th>Value</th><th>Enabled</th></tr>';
+  for (const d of staticDns) {
+    const en = d.enabled !== false;
+    h += `<tr><td class="mono">${esc(d.key||'')}</td><td>${esc(d.record_type||'A')}</td>
+      <td class="mono">${esc(d.value||'')}</td><td>${en ? badge('Yes','green') : badge('No','gray')}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function buildSettings(db) {
+  const settings = db.setting || [];
+  if (!settings.length) return '<p class="muted">No settings found.</p>';
+
+  const displayKeys = {
+    super_mgmt:'Management', connectivity:'Connectivity', dpi:'Deep Packet Inspection',
+    ips:'Intrusion Prevention', guest_access:'Guest Access', radius:'RADIUS',
+    ntp:'NTP', usg:'Gateway (USG)', auto_speedtest:'Speed Test',
+    country:'Country', locale:'Locale', mgmt:'Device Management',
+  };
+
+  let h = '<div class="card-grid">';
+  settings.sort((a,b) => (a.key||'').localeCompare(b.key||''));
+  for (const s of settings) {
+    if (!displayKeys[s.key]) continue;
+    const label = displayKeys[s.key];
+    const fields = {};
+    for (const [k,v] of Object.entries(s)) {
+      if (['_id','key','site_id'].includes(k) || v == null || v === '' || (Array.isArray(v) && v.length===0)) continue;
+      fields[k] = v;
+    }
+    if (!Object.keys(fields).length) continue;
+
+    h += `<div class="card"><h4>${esc(label)}</h4>`;
+    for (const [k,v] of Object.entries(fields).sort()) {
+      let cls = '';
+      let displayVal;
+      if (/password|secret/i.test(k) || k.startsWith('x_')) {
+        displayVal = esc(mask(String(v)));
+        cls = ' class="mono sensitive"';
+      } else if (typeof v === 'boolean') {
+        displayVal = v ? badge('Enabled','green') : badge('Disabled','gray');
+      } else if (typeof v === 'object') {
+        displayVal = `<span class="mono" style="font-size:0.8rem">${esc(JSON.stringify(v).slice(0,200))}</span>`;
+      } else {
+        displayVal = esc(v);
+      }
+      h += `<div class="row"><span class="label">${esc(k)}</span><span${cls}>${displayVal}</span></div>`;
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function buildAlarms(files) {
+  const alarms = getJsonFile(files, 'backup/uos/alarms/network/alarms.json');
+  if (!alarms || !Array.isArray(alarms)) return '<p class="muted">No alarms configured.</p>';
+
+  let h = '<table><tr><th>Alert Rule</th><th>Triggers</th><th>Status</th></tr>';
+  for (const a of alarms) {
+    const triggers = [];
+    for (const tg of (a.triggers_data||[[]])) {
+      if (Array.isArray(tg)) {
+        for (const t of tg) { if (t && typeof t === 'object') triggers.push(t.id||'?'); }
+      }
+    }
+    const paused = a.is_paused || false;
+    h += `<tr><td><strong>${esc(a.title||'')}</strong></td>
+      <td class="mono" style="font-size:0.82rem">${esc(triggers.join(', '))}</td>
+      <td>${paused ? badge('Paused','orange') : badge('Active','green')}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function buildCertificates(files) {
+  const certs = [];
+  const keys = [];
+  for (const path of Object.keys(files)) {
+    if (!path.startsWith('backup/')) continue;
+    if (path.endsWith('.crt') || path.endsWith('.pem')) certs.push(path);
+    else if (path.endsWith('.key')) keys.push(path);
+  }
+
+  let h = '';
+  if (certs.length) {
+    h += '<h3>Certificates</h3><table><tr><th>Path</th></tr>';
+    for (const c of certs.sort()) h += `<tr><td class="mono">${esc(c)}</td></tr>`;
+    h += '</table>';
+  }
+  if (keys.length) {
+    h += '<h3>Private Keys</h3><table><tr><th>Path</th><th>Status</th></tr>';
+    for (const k of keys.sort()) h += `<tr><td class="mono">${esc(k)}</td><td>${badge('SENSITIVE','red')}</td></tr>`;
+    h += '</table>';
+  }
+  if (!h) h = '<p class="muted">No certificates found.</p>';
+  return h;
+}
+
+function buildSecurity(db, files) {
+  const findings = [];
+
+  // SSH
+  const sysData = getJsonFile(files, 'backup/ucore/system-data.json');
+  if (sysData && sysData.sshEnabled) findings.push(['info', 'SSH is enabled on the console']);
+
+  for (const s of (db.setting||[])) {
+    if (s.key === 'ips') {
+      if (!s.enabled) {
+        findings.push(['warn', 'Intrusion Prevention System (IPS/IDS) is DISABLED']);
+      } else {
+        findings.push(['ok', `IPS/IDS is enabled (mode: ${s.mode||'ids'})`]);
+        if (s.restrict_tor) findings.push(['ok', 'Tor traffic restriction enabled']);
+        if (s.ad_blocking_enabled) findings.push(['ok', `Ad blocking enabled (mode: ${s.ad_blocking_mode||'N/A'})`]);
+        else findings.push(['info', 'Ad blocking is disabled']);
+        if (!s.honeypot_enabled) findings.push(['info', 'Honeypot is disabled']);
+        else findings.push(['ok', 'Honeypot enabled']);
+      }
+    }
+    if (s.key === 'dpi') {
+      if (s.enabled) findings.push(['ok', 'Deep Packet Inspection (DPI) enabled']);
+      else findings.push(['info', 'Deep Packet Inspection (DPI) disabled']);
+    }
+  }
+
+  for (const w of (db.wlanconf||[])) {
+    if (w.enabled === false) continue;
+    const name = w.name || '';
+    if ((w.security||'open') === 'open') findings.push(['warn', `SSID '${name}' has no encryption (open network)`]);
+    const pw = w.x_passphrase || '';
+    if (pw && pw.length < 12) findings.push(['warn', `SSID '${name}' has a short WiFi password (${pw.length} chars)`]);
+    if (w.wpa_mode === 'wpa2' && !w.wpa3_support) findings.push(['info', `SSID '${name}' uses WPA2 only (no WPA3)`]);
+    if (w.pmf_mode === 'disabled') findings.push(['info', `SSID '${name}' has PMF (802.11w) disabled`]);
+  }
+
+  const fwds = (db.portforward||[]).filter(pf => pf.enabled !== false);
+  if (fwds.length) {
+    findings.push(['info', `${fwds.length} active port forwarding rule(s) expose internal services`]);
+    for (const pf of fwds) {
+      const src = pf.src || 'any';
+      const srcNote = (src && src !== 'any') ? ` (restricted to ${src})` : ' (ANY source)';
+      findings.push([src && src !== 'any' ? 'info' : 'warn', `Port ${pf.dst_port||'?'} forwarded to ${pf.fwd||'?'}${srcNote}`]);
+    }
+  }
+
+  const blocked = (db.user||[]).filter(c => c.blocked);
+  if (blocked.length) findings.push(['info', `${blocked.length} blocked client(s)`]);
+
+  const keyCount = Object.keys(files).filter(p => p.startsWith('backup/') && p.endsWith('.key')).length;
+  if (keyCount) findings.push(['warn', `Backup contains ${keyCount} private key file(s) — store securely`]);
+
+  if (files['backup/ucore/config/cloud.yaml'])
+    findings.push(['warn', 'Cloud credentials (deviceAuth, RSA private key) present in backup']);
+
+  if (!findings.length) return '<p class="muted">No findings.</p>';
+
+  let h = '';
+  for (const [level, text] of findings) {
+    h += `<div class="finding finding-${level}">${severityBadge(level, level.toUpperCase())} ${esc(text)}</div>`;
+  }
+  return h;
+}
+
+// ─── File helpers ────────────────────────────────────────────────────
+
+function getJsonFile(files, path) {
+  const buf = files[path];
+  if (!buf) return null;
+  try { return JSON.parse(new TextDecoder().decode(new Uint8Array(buf))); }
+  catch(e) { return null; }
+}
+
+function getTextFile(files, path) {
+  const buf = files[path];
+  if (!buf) return null;
+  return new TextDecoder('utf-8', {fatal:false}).decode(new Uint8Array(buf));
+}
+
+function parseSimpleYaml(text) {
+  // Very basic YAML parser for flat key: value
+  const result = {};
+  for (const line of text.split('\n')) {
+    const m = line.match(/^(\w[\w.-]*)\s*:\s*(.+)/);
+    if (m) result[m[1]] = m[2].trim().replace(/^["']|["']$/g, '');
+  }
+  return result;
+}
+
+// ─── Generate Full Report HTML ───────────────────────────────────────
+
+function generateReport(meta, db, files) {
+  const sections = [
+    ['overview', 'Overview', buildOverview(meta, db, files)],
+    ['admin-users', 'Admin Users', buildUsers(files)],
+    ['networks-vlans', 'Networks / VLANs', buildNetworks(db)],
+    ['wireless-ssids', 'Wireless (SSIDs)', buildWlans(db)],
+    ['devices', 'Devices', buildDevices(db)],
+    ['clients', 'Clients', buildClients(db)],
+    ['firewall', 'Firewall', buildFirewall(db)],
+    ['port-forwarding', 'Port Forwarding', buildPortForwarding(db)],
+    ['vpn-users', 'VPN Users', buildVpn(db)],
+    ['radius', 'RADIUS', buildRadius(db)],
+    ['static-dns', 'Static DNS', buildDns(db)],
+    ['controller-settings', 'Controller Settings', buildSettings(db)],
+    ['alarms-alerts', 'Alarms / Alerts', buildAlarms(files)],
+    ['certificates-keys', 'Certificates & Keys', buildCertificates(files)],
+    ['security-findings', 'Security Findings', buildSecurity(db, files)],
+  ];
+
+  const tocHtml = sections.map(([id, title]) => `<li><a href="#${id}">${esc(title)}</a></li>`).join('\n');
+  const sectionsHtml = sections.map(([id, title, content]) =>
+    `<section id="${id}"><h2>${esc(title)}</h2>${content}</section>`
+  ).join('\n');
+
+  const now = new Date().toISOString().replace('T',' ').replace(/\.\d+Z/,' UTC');
+
+  return { tocHtml, sectionsHtml, meta, now };
+}
+
+function renderReport(reportData) {
+  const { tocHtml, sectionsHtml, meta, now } = reportData;
+
+  const reportView = document.getElementById('report-view');
+  reportView.innerHTML = `
+    <header>
+      <h1>${esc(meta.title)}</h1>
+      <div class="meta">
+        <span>Generated: ${esc(now)}</span>
+        <span>Hostname: <strong>${esc(meta.hostname)}</strong></span>
+        <span>Hardware: <strong>${esc(meta.hardware)}</strong></span>
+        <span>Firmware: <strong>${esc(meta.firmware)}</strong></span>
+      </div>
+    </header>
+    <div class="toolbar">
+      <button onclick="downloadReport()">Download Report</button>
+      <button class="secondary" onclick="location.reload()">Analyse Another Backup</button>
+    </div>
+    <nav>
+      <h3>Contents</h3>
+      <ul>${tocHtml}</ul>
+    </nav>
+    ${sectionsHtml}
+  `;
+
+  document.getElementById('upload-screen').style.display = 'none';
+  reportView.style.display = 'block';
+}
+
+function buildStandaloneHtml(reportData) {
+  const { tocHtml, sectionsHtml, meta, now } = reportData;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(meta.title)}</title>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+  --border: #475569; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #3b82f6; --accent2: #60a5fa;
+  --green: #22c55e; --orange: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.6; }
+.container { max-width:1200px; margin:0 auto; padding:20px; }
+header { background:linear-gradient(135deg,#1e3a5f,#0f172a); padding:30px; border-radius:12px;
+  margin-bottom:24px; border:1px solid var(--border); }
+header h1 { font-size:1.8rem; margin-bottom:8px; }
+header .meta { color:var(--text2); font-size:0.9rem; }
+header .meta span { margin-right:20px; }
+nav { background:var(--surface); padding:16px 20px; border-radius:10px;
+  margin-bottom:24px; border:1px solid var(--border); }
+nav h3 { margin-bottom:10px; color:var(--accent2); font-size:0.85rem; text-transform:uppercase; letter-spacing:1px; }
+nav ul { list-style:none; display:flex; flex-wrap:wrap; gap:6px 16px; }
+nav a { color:var(--accent2); text-decoration:none; font-size:0.88rem; }
+nav a:hover { text-decoration:underline; }
+section { background:var(--surface); border-radius:10px; padding:24px;
+  margin-bottom:20px; border:1px solid var(--border); }
+section h2 { font-size:1.3rem; margin-bottom:16px; padding-bottom:8px;
+  border-bottom:2px solid var(--accent); }
+h3 { font-size:1.05rem; margin:18px 0 10px; color:var(--accent2); }
+table { width:100%; border-collapse:collapse; margin:10px 0; font-size:0.88rem; }
+th { background:var(--surface2); text-align:left; padding:8px 12px; font-weight:600;
+  border-bottom:2px solid var(--border); white-space:nowrap; }
+td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+tr:hover td { background:rgba(59,130,246,0.05); }
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.78rem;
+  font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.badge-green { background:rgba(34,197,94,0.15); color:var(--green); }
+.badge-orange { background:rgba(245,158,11,0.15); color:var(--orange); }
+.badge-red { background:rgba(239,68,68,0.15); color:var(--red); }
+.badge-blue { background:rgba(59,130,246,0.15); color:var(--blue); }
+.badge-gray { background:rgba(148,163,184,0.15); color:var(--text2); }
+.badge-purple { background:rgba(168,85,247,0.15); color:#a855f7; }
+.card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+.card { background:var(--surface2); border-radius:8px; padding:16px; border:1px solid var(--border); }
+.card h4 { margin-bottom:8px; font-size:0.95rem; }
+.card .row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem; }
+.card .row .label { color:var(--text2); }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+.stat { background:var(--surface2); border-radius:8px; padding:14px; text-align:center; border:1px solid var(--border); }
+.stat .num { font-size:1.6rem; font-weight:700; color:var(--accent2); }
+.stat .lbl { font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+.finding { padding:10px 14px; margin:6px 0; border-radius:6px; font-size:0.88rem; border-left:4px solid; }
+.finding-ok { background:rgba(34,197,94,0.08); border-color:var(--green); }
+.finding-info { background:rgba(59,130,246,0.08); border-color:var(--blue); }
+.finding-warn { background:rgba(245,158,11,0.08); border-color:var(--orange); }
+.finding-critical { background:rgba(239,68,68,0.08); border-color:var(--red); }
+.mono { font-family:'SF Mono',Consolas,monospace; font-size:0.84rem; }
+.sensitive { color:var(--orange); cursor:help; }
+.muted { color:var(--text2); }
+@media(max-width:768px) {
+  .card-grid { grid-template-columns:1fr; }
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  table { font-size:0.8rem; }
+  th,td { padding:6px 8px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <h1>${esc(meta.title)}</h1>
+  <div class="meta">
+    <span>Generated: ${esc(now)}</span>
+    <span>Hostname: <strong>${esc(meta.hostname)}</strong></span>
+    <span>Hardware: <strong>${esc(meta.hardware)}</strong></span>
+    <span>Firmware: <strong>${esc(meta.firmware)}</strong></span>
+  </div>
+</header>
+<nav>
+  <h3>Contents</h3>
+  <ul>${tocHtml}</ul>
+</nav>
+${sectionsHtml}
+</div>
+</body>
+</html>`;
+}
+
+// ─── Download ────────────────────────────────────────────────────────
+
+let _reportData = null;
+
+function downloadReport() {
+  if (!_reportData) return;
+  const html = buildStandaloneHtml(_reportData);
+  const blob = new Blob([html], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'unifi_backup_report.html';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Main Pipeline ───────────────────────────────────────────────────
+
+const statusEl = document.getElementById('status');
+const progressBar = document.getElementById('progress-bar');
+const progressFill = document.getElementById('progress-fill');
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+function setStatus(msg) { statusEl.textContent = msg; }
+function setProgress(pct) {
+  progressBar.style.display = 'block';
+  progressFill.style.width = pct + '%';
+}
+
+async function processFile(file) {
+  try {
+    setStatus(`Reading ${file.name} (${(file.size/1024).toFixed(0)} KB)...`);
+    setProgress(10);
+
+    const arrayBuffer = await file.arrayBuffer();
+    const isV2 = file.name.endsWith('.unifi');
+
+    setStatus(isV2 ? 'Decrypting (AES-256-CBC)...' : 'Decrypting (AES-128-CBC)...');
+    setProgress(25);
+
+    let decrypted;
+    if (isV2) {
+      decrypted = await decryptUnifiV2(arrayBuffer);
+    } else {
+      decrypted = await decryptUnf(arrayBuffer);
+    }
+
+    setStatus('Extracting archive...');
+    setProgress(50);
+
+    console.log('Decrypted+decompressed size:', decrypted.byteLength);
+    let files;
+    const firstBytes = new Uint8Array(decrypted.slice(0, 4));
+    console.log('First 4 bytes:', Array.from(firstBytes).map(b => b.toString(16).padStart(2,'0')).join(' '));
+    if (firstBytes[0] === 0x50 && firstBytes[1] === 0x4B) {
+      // ZIP (legacy .unf)
+      files = parseZip(decrypted);
+    } else {
+      // tar (v2 .unifi)
+      files = parseTar(decrypted);
+    }
+
+    const fileCount = Object.keys(files).length;
+    setStatus(`Extracted ${fileCount} files. Parsing database...`);
+    setProgress(65);
+
+    // Find and decompress db.gz
+    let db = {};
+    const dbGzPath = Object.keys(files).find(p => p.endsWith('network/db.gz') || p === 'db.gz');
+    if (dbGzPath) {
+      try {
+        const dbRaw = await gunzip(files[dbGzPath]);
+        db = loadNetworkDb(dbRaw);
+        const docCount = Object.values(db).reduce((s,v) => s + v.length, 0);
+        setStatus(`Parsed ${docCount} documents across ${Object.keys(db).length} collections. Building report...`);
+      } catch(e) {
+        setStatus(`Warning: Could not parse database (${e.message}). Building partial report...`);
+      }
+    } else {
+      setStatus('No network database found. Building partial report...');
+    }
+    setProgress(80);
+
+    // Load metadata
+    const meta = { title: 'UniFi Backup Report', hostname: '', hardware: '', firmware: '' };
+    const metaJson = getJsonFile(files, 'backup/metadata.json');
+    if (metaJson) {
+      meta.hardware = metaJson.hardware_shortname || '';
+      meta.firmware = metaJson.firmware_version || '';
+      meta.title = `UniFi Backup Report — ${meta.hardware}`;
+    }
+    const sysJson = getJsonFile(files, 'backup/ucore/system-data.json');
+    if (sysJson) meta.hostname = sysJson.hostname || '';
+
+    setProgress(90);
+    const reportData = generateReport(meta, db, files);
+    _reportData = reportData;
+
+    setProgress(100);
+    setStatus('Done!');
+
+    setTimeout(() => renderReport(reportData), 200);
+
+  } catch(e) {
+    setStatus(`Error: ${e.message}`);
+    console.error(e);
+  }
+}
+
+// ─── Event Handlers ──────────────────────────────────────────────────
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) processFile(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
